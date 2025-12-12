@@ -11,18 +11,18 @@ export const navbarItems = [
   },
   {
     id: 3,
-    name: "Blogs",
+    name: "Blog",
     link: "/blog",
   },
   {
     id: 4,
-    name: "About Us",
-    link: "/about",
+    name: "FAQ",
+    link: "/faq",
   },
 
   {
     id: 5,
     name: "Contact us",
-    link: "/contact",
+    link: "/contact-us",
   },
 ];

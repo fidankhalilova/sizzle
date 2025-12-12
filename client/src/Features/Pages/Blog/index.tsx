@@ -1,5 +1,11 @@
+import BlogTemplate from "../../Templates/BlogTemplate";
+
 const Blog = () => {
-  return <div>Blog</div>;
+  return (
+    <>
+      <BlogTemplate />
+    </>
+  );
 };
 
 export default Blog;

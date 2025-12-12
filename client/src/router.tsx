@@ -2,13 +2,14 @@ import { createBrowserRouter } from "react-router";
 import Layout from "./Layout";
 import Home from "./Features/Pages/Home";
 import Shop from "./Features/Pages/Shop";
-import AboutUs from "./Features/Pages/AboutUs";
+import FAQ from "./Features/Pages/FAQ";
 import Blog from "./Features/Pages/Blog";
 import ContactUs from "./Features/Pages/ContactUs";
 import Register from "./Features/Pages/Register";
 import Login from "./Features/Pages/Login";
 import ShopDetail from "./Features/Pages/ShopDetail";
 import BlogDetail from "./Features/Pages/BlogDetail";
+import ProtectedRoute from "./Auth/ProtectRoot";
 
 export const router = createBrowserRouter([
   {
@@ -32,11 +33,11 @@ export const router = createBrowserRouter([
         element: <Shop />,
       },
       {
-        path: "/about",
-        element: <AboutUs />,
+        path: "/faq",
+        element: <FAQ />,
       },
       {
-        path: "/blogs",
+        path: "/blog",
         element: <Blog />,
       },
       {
@@ -50,6 +51,30 @@ export const router = createBrowserRouter([
       {
         path: "/blog/:id",
         element: <BlogDetail />,
+      },
+      {
+        path: "/orders",
+        element: (
+          <ProtectedRoute>
+            <div>My Orders Page</div>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/wishlist",
+        element: (
+          <ProtectedRoute>
+            <div>Wishlist Page</div>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/settings",
+        element: (
+          <ProtectedRoute>
+            <div>Settings Page</div>
+          </ProtectedRoute>
+        ),
       },
     ],
   },

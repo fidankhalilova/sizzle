@@ -1,5 +1,11 @@
+import ShopTemplate from "../../Templates/ShopTemplate";
+
 const Shop = () => {
-  return <div>Shop</div>;
+  return (
+    <>
+      <ShopTemplate />
+    </>
+  );
 };
 
 export default Shop;

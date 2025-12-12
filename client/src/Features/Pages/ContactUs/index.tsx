@@ -1,5 +1,11 @@
+import ContactTemplate from "../../Templates/ContactTemplate";
+
 const ContactUs = () => {
-  return <div>ContactUs</div>;
+  return (
+    <>
+      <ContactTemplate />
+    </>
+  );
 };
 
 export default ContactUs;
