@@ -9,8 +9,9 @@ import {
 } from "lucide-react";
 import { productService } from "../../../../Services/api";
 import type { Product } from "../../../../Types/types";
-import { useAppDispatch } from "../../../../Store/hooks";
+import { useAppDispatch, useAppSelector } from "../../../../Store/hooks";
 import { addToCart } from "../../../../Store/Slices/cartSlice";
+import LoginModal from "../../../Components/LoginModal";
 
 const ProductsPage: React.FC = () => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -25,6 +26,8 @@ const ProductsPage: React.FC = () => {
     sizes: [] as string[],
     genders: [] as string[],
   });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingCartItem, setPendingCartItem] = useState<any>(null);
 
   const [filters, setFilters] = useState({
     category: "",
@@ -43,6 +46,7 @@ const ProductsPage: React.FC = () => {
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
 
   const dispatch = useAppDispatch();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
 
   // Fallback image
   const fallbackImage =
@@ -172,13 +176,37 @@ const ProductsPage: React.FC = () => {
     try {
       setAddingToCart(product.id);
 
-      // Extract price from product.price string (format: "$ 99.99 USD")
+      // IMPROVED PRICE PARSING - handles multiple formats
       let price = 0;
+
+      console.log(
+        "🔍 Original product.price:",
+        product.price,
+        "Type:",
+        typeof product.price
+      );
+
       if (typeof product.price === "string") {
-        const priceMatch = product.price.match(/\$ (\d+(\.\d+)?)/);
-        price = priceMatch ? parseFloat(priceMatch[1]) : 0;
+        // Remove all non-numeric characters except decimal point
+        const cleanedPrice = product.price.replace(/[^0-9.]/g, "");
+        price = parseFloat(cleanedPrice);
+
+        console.log("🔍 Cleaned price string:", cleanedPrice);
+        console.log("🔍 Parsed price:", price);
       } else if (typeof product.price === "number") {
         price = product.price;
+      }
+
+      // Validate price
+      if (isNaN(price) || price <= 0) {
+        console.error(
+          "❌ Invalid price detected:",
+          product.price,
+          "-> parsed as:",
+          price
+        );
+        alert(`Invalid price for ${product.name}. Please contact support.`);
+        return;
       }
 
       const cartItem = {
@@ -188,26 +216,26 @@ const ProductsPage: React.FC = () => {
         image: product.image || fallbackImage,
         size: selected.size,
         color: selected.color,
-        // Use default max quantity since stock might not be in your Product type
-        maxQuantity: 99, // Default value
+        quantity: 1,
       };
 
-      console.log("🛒 Adding to cart:", cartItem);
+      console.log("✅ Final cart item:", cartItem);
 
-      // Dispatch to Redux store
-      dispatch(addToCart(cartItem));
+      // Check if user is authenticated
+      if (!isAuthenticated) {
+        // Store the cart item and show login modal
+        setPendingCartItem(cartItem);
+        setShowLoginModal(true);
 
-      // Show success message
-      const event = new CustomEvent("cart:add", {
-        detail: {
-          product: cartItem,
-          message: `${cartItem.name} added to cart!`,
-        },
-      });
-      window.dispatchEvent(event);
+        // Show a message
+        console.log("🔄 User not authenticated, showing login modal");
+      } else {
+        // Add directly to cart
+        dispatch(addToCart(cartItem));
+        alert(`${cartItem.name} added to cart! Price: $${price.toFixed(2)}`);
+      }
 
-      // Optional: You could trigger a notification here
-      console.log("✅ Product added to cart successfully");
+      console.log("✅ Product processed successfully");
     } catch (error) {
       console.error("❌ Error adding to cart:", error);
       alert("Failed to add product to cart. Please try again.");
@@ -815,6 +843,32 @@ const ProductsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => {
+          setShowLoginModal(false);
+          setPendingCartItem(null);
+        }}
+        onSwitchToRegister={() => {
+          setShowLoginModal(false);
+          // You might want to navigate to register or show register modal
+          // For now, just close
+        }}
+        onForgotPassword={() => {
+          setShowLoginModal(false);
+          console.log("Forgot password clicked");
+        }}
+        onLoginSuccess={() => {
+          // When login is successful, add the pending item to cart
+          if (pendingCartItem) {
+            dispatch(addToCart(pendingCartItem));
+            alert(`${pendingCartItem.name} has been added to your cart!`);
+            setPendingCartItem(null);
+          }
+          setShowLoginModal(false);
+        }}
+      />
     </div>
   );
 };

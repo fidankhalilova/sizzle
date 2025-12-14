@@ -1,7 +1,6 @@
 // src/hooks/useAddToCart.ts
 import { useCallback, useState } from "react";
 import { useAppDispatch } from "../Store/hooks";
-import { addToCart } from "../Store/Slices/cartSlice";
 
 interface AddToCartOptions {
   id: number;
@@ -30,7 +29,7 @@ export const useAddToCart = () => {
         // Simulate API call delay (remove in production)
         await new Promise((resolve) => setTimeout(resolve, 300));
 
-        dispatch(addToCart(options));
+        // dispatch(addToCart(options));
 
         // Success feedback
         console.log("Added to cart:", options);

@@ -1,5 +1,5 @@
 import MarqueeBanner from "../Components/Marquee";
-import ProductsPage from "../Sections/Shop/ProductsAndFiltering";
+import ProductsPage from "../Sections/Shop/ProductsPage";
 import ShopHeroBanner from "../Sections/Shop/ShopBanner";
 
 const ShopTemplate = () => {
@@ -7,6 +7,7 @@ const ShopTemplate = () => {
     <div>
       <ShopHeroBanner />
       <ProductsPage />
+      <div className="mb-20"></div>
       <MarqueeBanner />
     </div>
   );

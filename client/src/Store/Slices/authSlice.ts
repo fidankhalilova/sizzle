@@ -10,7 +10,7 @@ const initialState: AuthState = {
   error: null,
 };
 
-// In authSlice.ts, replace checkAuth thunk with this:
+// IMPROVED checkAuth - handles all cases properly
 export const checkAuth = createAsyncThunk(
   "auth/checkAuth",
   async (_, { rejectWithValue }) => {
@@ -20,16 +20,21 @@ export const checkAuth = createAsyncThunk(
       // Get current session
       const {
         data: { session },
+        error: sessionError,
       } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("❌ Session error:", sessionError);
+        return rejectWithValue("Session error");
+      }
 
       console.log("🔄 Session exists?", !!session);
 
       if (session?.user) {
-        console.log("🔄 User email:", session.user.email);
-        console.log("🔄 User metadata:", session.user.user_metadata);
+        console.log("✅ User found:", session.user.email);
 
-        // Build user object from session (ALWAYS works)
-        const userData = {
+        // Build user object from session
+        const userData: User = {
           id: session.user.id,
           email: session.user.email!,
           name:
@@ -41,17 +46,14 @@ export const checkAuth = createAsyncThunk(
         };
 
         console.log("✅ checkAuth: Returning user:", userData.email);
-
         return { user: userData };
       }
 
-      console.log("🔄 No session found, returning empty");
-      // Return empty instead of rejecting
-      return { user: null };
+      console.log("❌ No session found");
+      return rejectWithValue("No session");
     } catch (error: any) {
       console.error("❌ checkAuth error:", error);
-      // Always return empty instead of rejecting
-      return { user: null };
+      return rejectWithValue(error.message || "Auth check failed");
     }
   }
 );
@@ -64,15 +66,17 @@ export const loginWithEmail = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
+      console.log("🔐 Attempting login for:", email);
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error("❌ Login error:", error);
         let errorMessage = error.message;
 
-        // User-friendly error messages
         if (error.message.includes("Invalid login credentials")) {
           errorMessage = "Invalid email or password";
         } else if (error.message.includes("Email not confirmed")) {
@@ -83,7 +87,8 @@ export const loginWithEmail = createAsyncThunk(
       }
 
       if (data.user) {
-        // Get user data
+        console.log("✅ Login successful:", data.user.email);
+
         const userData: User = {
           id: data.user.id,
           email: data.user.email!,
@@ -100,6 +105,7 @@ export const loginWithEmail = createAsyncThunk(
 
       return rejectWithValue("Login failed");
     } catch (error: any) {
+      console.error("❌ Login exception:", error);
       return rejectWithValue(error.message || "Login failed");
     }
   }
@@ -117,8 +123,8 @@ export const registerWithEmail = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      // Disable email confirmation for development
-      // In production, remove the emailRedirectTo option
+      console.log("📝 Attempting registration for:", email);
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -127,12 +133,11 @@ export const registerWithEmail = createAsyncThunk(
             name: name,
             full_name: name,
           },
-          // Remove this line in production to enable email confirmation
-          // emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
       if (error) {
+        console.error("❌ Registration error:", error);
         let errorMessage = error.message;
 
         if (error.message.includes("already registered")) {
@@ -145,7 +150,9 @@ export const registerWithEmail = createAsyncThunk(
       }
 
       if (data.user) {
-        // Auto login after registration (for development)
+        console.log("✅ Registration successful, auto-logging in...");
+
+        // Auto login after registration
         const { data: loginData, error: loginError } =
           await supabase.auth.signInWithPassword({
             email,
@@ -153,16 +160,20 @@ export const registerWithEmail = createAsyncThunk(
           });
 
         if (loginError) {
+          console.error("❌ Auto-login failed:", loginError);
           return rejectWithValue(
             "Registration successful. Please login manually."
           );
         }
 
         if (loginData.user) {
+          console.log("✅ Auto-login successful");
+
           const userData: User = {
             id: loginData.user.id,
             email: loginData.user.email!,
             name: name,
+            avatar_url: loginData.user.user_metadata?.avatar_url,
           };
 
           return { user: userData };
@@ -171,6 +182,7 @@ export const registerWithEmail = createAsyncThunk(
 
       return rejectWithValue("Registration failed");
     } catch (error: any) {
+      console.error("❌ Registration exception:", error);
       return rejectWithValue(error.message || "Registration failed");
     }
   }
@@ -181,12 +193,16 @@ export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (_, { rejectWithValue }) => {
     try {
+      console.log("🚪 Logging out...");
       const { error } = await supabase.auth.signOut();
       if (error) {
+        console.error("❌ Logout error:", error);
         return rejectWithValue(error.message);
       }
+      console.log("✅ Logout successful");
       return null;
     } catch (error: any) {
+      console.error("❌ Logout exception:", error);
       return rejectWithValue(error.message);
     }
   }
@@ -198,6 +214,11 @@ const authSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+    },
+    // Add this to manually set auth state
+    setUser: (state, action) => {
+      state.user = action.payload;
+      state.isAuthenticated = !!action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -211,11 +232,14 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.user = action.payload.user;
       state.error = null;
+      console.log("✅ Redux: User authenticated:", action.payload.user.email);
     });
     builder.addCase(checkAuth.rejected, (state) => {
       state.isLoading = false;
       state.isAuthenticated = false;
       state.user = null;
+      state.error = null; // Don't set error for rejected auth checks
+      console.log("❌ Redux: Auth check rejected");
     });
 
     // Login
@@ -228,10 +252,12 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.user = action.payload.user;
       state.error = null;
+      console.log("✅ Redux: Login successful:", action.payload.user.email);
     });
     builder.addCase(loginWithEmail.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
+      console.log("❌ Redux: Login failed:", action.payload);
     });
 
     // Register
@@ -244,10 +270,15 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.user = action.payload.user;
       state.error = null;
+      console.log(
+        "✅ Redux: Registration successful:",
+        action.payload.user.email
+      );
     });
     builder.addCase(registerWithEmail.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
+      console.log("❌ Redux: Registration failed:", action.payload);
     });
 
     // Logout
@@ -259,13 +290,15 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.user = null;
       state.error = null;
+      console.log("✅ Redux: Logout successful");
     });
     builder.addCase(logoutUser.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
+      console.log("❌ Redux: Logout failed:", action.payload);
     });
   },
 });
 
-export const { clearError } = authSlice.actions;
+export const { clearError, setUser } = authSlice.actions;
 export default authSlice.reducer;

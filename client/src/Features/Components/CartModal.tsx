@@ -1,4 +1,5 @@
-import React from "react";
+// src/Features/Components/CartModal.tsx
+import React, { useState } from "react";
 import {
   X,
   ShoppingBag,
@@ -7,6 +8,7 @@ import {
   Trash2,
   ArrowRight,
   Package,
+  AlertCircle,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../../Store/hooks";
 import {
@@ -14,6 +16,7 @@ import {
   updateQuantity,
   clearCart,
 } from "../../Store/Slices/cartSlice";
+import { useNavigate } from "react-router";
 
 interface CartModalProps {
   isOpen: boolean;
@@ -22,11 +25,15 @@ interface CartModalProps {
 
 const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const {
     items: cartItems,
     totalItems,
     totalPrice,
   } = useAppSelector((state) => state.cart);
+
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   // Calculate shipping (example: free over $100)
   const shippingFee = totalPrice >= 100 ? 0 : 9.99;
@@ -42,23 +49,46 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
     color: string,
     quantity: number
   ) => {
-    dispatch(updateQuantity({ id, size, color, quantity }));
+    const newQuantity = Math.max(1, quantity);
+    dispatch(updateQuantity({ id, size, color, quantity: newQuantity }));
   };
 
   const handleClearCart = () => {
-    dispatch(clearCart());
+    if (cartItems.length === 0) return;
+
+    if (window.confirm("Are you sure you want to clear your cart?")) {
+      dispatch(clearCart());
+    }
   };
 
   const handleCheckout = () => {
-    // Add your checkout logic here
-    console.log("Proceeding to checkout");
+    if (cartItems.length === 0) {
+      alert("Your cart is empty!");
+      return;
+    }
+
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      onClose();
+      // Store current URL for redirect after login
+      sessionStorage.setItem("redirectAfterLogin", "/checkout");
+      // Show login modal or redirect to login
+      navigate("/login");
+      return;
+    }
+
+    setIsCheckingOut(true);
     onClose();
-    // window.location.href = "/checkout";
+    navigate("/checkout");
   };
 
   const handleContinueShopping = () => {
     onClose();
-    // window.location.href = "/products";
+  };
+
+  const handleLoginClick = () => {
+    onClose();
+    navigate("/login");
   };
 
   return (
@@ -88,6 +118,10 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
               <p className="text-sm text-gray-500">
                 {cartItems.length} unique item
                 {cartItems.length !== 1 ? "s" : ""}
+                {cartItems.length > 0 &&
+                  (isAuthenticated
+                    ? " • Saved to your account"
+                    : " • Saved locally")}
               </p>
             </div>
           </div>
@@ -116,6 +150,7 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
               <p className="text-gray-500 mb-8 max-w-xs">
                 Looks like you haven't added any products to your cart yet.
               </p>
+
               <button
                 onClick={handleContinueShopping}
                 className="px-8 py-3 bg-[#04322f] text-white rounded-full font-medium hover:bg-[#03201e] transition-colors"
@@ -124,113 +159,140 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
               </button>
             </div>
           ) : (
-            <div className="space-y-6 pb-4">
-              {cartItems.map((item) => (
-                <div
-                  key={`${item.id}-${item.size}-${item.color}`}
-                  className="flex gap-4 pb-6 border-b last:border-b-0 group"
-                >
-                  {/* Product Image */}
-                  <div className="w-24 h-24 shrink-0 relative">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-full object-cover rounded-xl"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          "https://via.placeholder.com/150";
-                      }}
-                    />
-                    {/* Quick remove button on hover */}
-                    <button
-                      onClick={() =>
-                        handleRemoveItem(item.id, item.size, item.color)
-                      }
-                      className="absolute -top-2 -right-2 bg-white rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
-                      aria-label="Remove item"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+            <>
+              {/* Authentication Warning */}
+              {!isAuthenticated && (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-yellow-800 font-medium">
+                        Sign in to save your cart to your account
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Your items are saved locally. Sign in to access them
+                        from any device and proceed to checkout.
+                      </p>
+                      <button
+                        onClick={handleLoginClick}
+                        className="mt-2 text-sm text-[#04322f] font-medium hover:underline"
+                      >
+                        Sign in now →
+                      </button>
+                    </div>
                   </div>
+                </div>
+              )}
 
-                  {/* Product Details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-semibold text-gray-900 truncate">
-                        {item.name}
-                      </h3>
+              <div className="space-y-6 pb-4">
+                {cartItems.map((item) => (
+                  <div
+                    key={`${item.id}-${item.size}-${item.color}`}
+                    className="flex gap-4 pb-6 border-b last:border-b-0 group"
+                  >
+                    {/* Product Image */}
+                    <div className="w-24 h-24 shrink-0 relative">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-full object-cover rounded-xl"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "https://via.placeholder.com/150";
+                        }}
+                      />
+                      {/* Quick remove button on hover */}
                       <button
                         onClick={() =>
                           handleRemoveItem(item.id, item.size, item.color)
                         }
-                        className="text-gray-400 hover:text-red-500 transition-colors ml-2"
+                        className="absolute -top-2 -right-2 bg-white rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
                         aria-label="Remove item"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
 
-                    {/* Size and Color */}
-                    <div className="flex items-center gap-4 mb-3">
-                      <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                        Size: <span className="font-medium">{item.size}</span>
-                      </span>
-                      <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                        Color: <span className="font-medium">{item.color}</span>
-                      </span>
-                    </div>
-
-                    {/* Quantity Controls and Price */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    {/* Product Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between mb-2">
+                        <h3 className="font-semibold text-gray-900 truncate">
+                          {item.name}
+                        </h3>
                         <button
                           onClick={() =>
-                            handleUpdateQuantity(
-                              item.id,
-                              item.size,
-                              item.color,
-                              item.quantity - 1
-                            )
+                            handleRemoveItem(item.id, item.size, item.color)
                           }
-                          className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={item.quantity <= 1}
-                          aria-label="Decrease quantity"
+                          className="text-gray-400 hover:text-red-500 transition-colors ml-2"
+                          aria-label="Remove item"
                         >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="w-8 text-center font-medium">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() =>
-                            handleUpdateQuantity(
-                              item.id,
-                              item.size,
-                              item.color,
-                              item.quantity + 1
-                            )
-                          }
-                          className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full hover:bg-gray-100 transition-colors"
-                          aria-label="Increase quantity"
-                        >
-                          <Plus className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-[#04322f]">
-                          ${(item.price * item.quantity).toFixed(2)}
+
+                      {/* Size and Color */}
+                      <div className="flex items-center gap-4 mb-3">
+                        <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                          Size: <span className="font-medium">{item.size}</span>
+                        </span>
+                        <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                          Color:{" "}
+                          <span className="font-medium">{item.color}</span>
+                        </span>
+                      </div>
+
+                      {/* Quantity Controls and Price */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              handleUpdateQuantity(
+                                item.id,
+                                item.size,
+                                item.color,
+                                item.quantity - 1
+                              )
+                            }
+                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={item.quantity <= 1}
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-8 text-center font-medium">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() =>
+                              handleUpdateQuantity(
+                                item.id,
+                                item.size,
+                                item.color,
+                                item.quantity + 1
+                              )
+                            }
+                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full hover:bg-gray-100 transition-colors"
+                            aria-label="Increase quantity"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
                         </div>
-                        {item.quantity > 1 && (
-                          <div className="text-xs text-gray-500">
-                            ${item.price.toFixed(2)} each
+                        <div className="text-right">
+                          <div className="font-bold text-[#04322f]">
+                            ${(item.price * item.quantity).toFixed(2)}
                           </div>
-                        )}
+                          {item.quantity > 1 && (
+                            <div className="text-xs text-gray-500">
+                              ${item.price.toFixed(2)} each
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
@@ -281,8 +343,19 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                 className="w-full py-4 bg-[#04322f] text-white rounded-full font-medium hover:bg-[#03201e] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={cartItems.length === 0}
               >
-                <span>Proceed to Checkout</span>
-                <ArrowRight className="w-5 h-5" />
+                {isCheckingOut ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </>
+                ) : !isAuthenticated ? (
+                  "Sign in to Checkout"
+                ) : (
+                  <>
+                    <span>Proceed to Checkout</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
               </button>
 
               <div className="flex gap-3">
@@ -309,7 +382,10 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                   over $100
                 </p>
                 <p className="text-xs text-gray-500">
-                  Returns accepted within 30 days
+                  Returns accepted within 30 days •{" "}
+                  {isAuthenticated
+                    ? "Cart saved to your account"
+                    : "Cart saved locally"}
                 </p>
               </div>
 
@@ -328,9 +404,9 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">256-bit</div>
+                  <div className="text-xs text-gray-500 mb-1">Saved</div>
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                    <div className="text-xs font-bold text-gray-700">256</div>
+                    <div className="text-xs font-bold text-gray-700">✓</div>
                   </div>
                 </div>
               </div>

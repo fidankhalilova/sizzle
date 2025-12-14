@@ -19,6 +19,7 @@ interface LoginModalProps {
   onClose: () => void;
   onSwitchToRegister: () => void;
   onForgotPassword: () => void;
+  onLoginSuccess?: () => void; // Add this
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({
@@ -26,6 +27,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
   onClose,
   onSwitchToRegister,
   onForgotPassword,
+  onLoginSuccess,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -48,6 +50,11 @@ const LoginModal: React.FC<LoginModalProps> = ({
       await dispatch(loginWithEmail(data)).unwrap();
       onClose();
       reset();
+
+      // Call onLoginSuccess if provided
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
     } catch (error) {
       console.error("Login error:", error);
     }

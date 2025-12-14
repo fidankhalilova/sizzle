@@ -10,12 +10,10 @@ import {
   User,
   Package,
   Heart,
-  Settings,
 } from "lucide-react";
 import { navbarItems } from "../../Constants/navbarItems";
 import { useAppDispatch, useAppSelector } from "../../Store/hooks";
-import { logoutUser, checkAuth } from "../../Store/Slices/authSlice";
-import { supabase } from "../../Lib/supabase";
+import { logoutUser } from "../../Store/Slices/authSlice";
 import LoginModal from "../../Features/Components/LoginModal";
 import RegisterModal from "../../Features/Components/RegisterModal";
 import CartModal from "../../Features/Components/CartModal";
@@ -30,6 +28,7 @@ const Header: React.FC = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [showDebug, setShowDebug] = useState<boolean>(false);
 
   // Redux hooks
   const dispatch = useAppDispatch();
@@ -38,31 +37,17 @@ const Header: React.FC = () => {
     user,
     isLoading: authLoading,
   } = useAppSelector((state) => state.auth);
-  const { totalItems, totalPrice } = useAppSelector((state) => state.cart);
+  const {
+    items: cartItems,
+    totalItems,
+    totalPrice,
+  } = useAppSelector((state) => state.cart);
 
   // Helper function to get display name
   const getUserDisplayName = (): string => {
     if (!user) return "Welcome";
     return user.name || user.email?.split("@")[0] || "User";
   };
-
-  // Check auth on mount and when user changes
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session && !isAuthenticated) {
-          await dispatch(checkAuth()).unwrap();
-        }
-      } catch (error) {
-        console.error("Auth init error:", error);
-      }
-    };
-
-    initializeAuth();
-  }, [dispatch, isAuthenticated]);
 
   // Scroll effect
   useEffect(() => {
@@ -126,68 +111,27 @@ const Header: React.FC = () => {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [searchOpen]);
 
-  // Add these useEffects to Header.tsx:
-  useEffect(() => {
-    // Check auth whenever component mounts or route changes
-    const checkAuthOnMount = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session && !isAuthenticated) {
-          console.log(
-            "🔁 Header: Session exists but Redux says not authenticated. Dispatching checkAuth..."
-          );
-          await dispatch(checkAuth()).unwrap();
-        }
-      } catch (error) {
-        console.error("Header auth check error:", error);
-      }
-    };
-
-    checkAuthOnMount();
-  }, [dispatch, isAuthenticated]);
-
-  // Listen for storage changes (multi-tab support)
-  useEffect(() => {
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === "sb-auth-token") {
-        console.log("📦 Storage changed, checking auth...");
-        dispatch(checkAuth());
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [dispatch]);
-
-  // Check auth on route change
-  useEffect(() => {
-    const checkAuthOnRouteChange = () => {
-      dispatch(checkAuth());
-    };
-
-    // Check auth when URL changes
-    window.addEventListener("popstate", checkAuthOnRouteChange);
-
-    return () => {
-      window.removeEventListener("popstate", checkAuthOnRouteChange);
-    };
-  }, [dispatch]);
-
   // Event handlers
-  const handleLogout = (): void => {
-    dispatch(logoutUser());
-    setUserDropdownOpen(false);
-    setMobileMenuOpen(false);
+  const handleLogout = async (): Promise<void> => {
+    try {
+      await dispatch(logoutUser()).unwrap();
+      setUserDropdownOpen(false);
+      setMobileMenuOpen(false);
+
+      // Clear any user-specific cart data
+      const cartData = localStorage.getItem("cart");
+      if (cartData) {
+        const cart = JSON.parse(cartData);
+        delete cart.userId;
+        localStorage.setItem("cart", JSON.stringify(cart));
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const handleUserClick = (): void => {
-    // ALWAYS open dropdown - user can decide to login or see account
+    if (authLoading) return;
     setUserDropdownOpen(!userDropdownOpen);
   };
 
@@ -215,66 +159,77 @@ const Header: React.FC = () => {
     console.log("Forgot password clicked");
   };
 
-  // Add these debug buttons somewhere in your UI (temporary)
-  <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 bg-white p-4 rounded-lg shadow-lg border">
-    <h3 className="text-sm font-bold mb-2">Cart Debug</h3>
-    <button
-      onClick={() => {
-        const cartData = localStorage.getItem("sizzle_cart");
-        console.log("📦 LocalStorage cart:", cartData);
-        if (cartData) {
-          const parsed = JSON.parse(cartData);
-          console.log("📦 Parsed cart:", parsed);
-          alert(
-            `${parsed.length} items in localStorage:\n${parsed
-              .map((item: any) => `• ${item.name} (${item.quantity}x)`)
-              .join("\n")}`
-          );
-        } else {
-          alert("No cart data in localStorage");
-        }
-      }}
-      className="px-3 py-2 bg-blue-500 text-white rounded text-xs"
-    >
-      Check localStorage
-    </button>
-    <button
-      onClick={() => {
-        // Manually add a test item
-        const testItem = {
-          id: 999,
-          name: "Test Product",
-          price: 29.99,
-          image: "https://via.placeholder.com/150",
-          size: "M",
-          color: "Black",
-          quantity: 1,
-        };
+  // User icon rendering logic
+  const renderUserIcon = () => {
+    if (authLoading) {
+      return (
+        <div className="p-1.5">
+          <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-gray-300 border-t-[#04322f] rounded-full animate-spin"></div>
+        </div>
+      );
+    }
 
-        const currentCart = localStorage.getItem("sizzle_cart");
-        const items = currentCart ? JSON.parse(currentCart) : [];
-        items.push(testItem);
-        localStorage.setItem("sizzle_cart", JSON.stringify(items));
+    if (isAuthenticated && user) {
+      return (
+        <div className="relative group">
+          <button
+            id="user-icon"
+            onClick={handleUserClick}
+            className={`p-1.5 rounded-full transition-colors relative ${
+              scrolled
+                ? "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                : "text-white hover:text-gray-200 hover:bg-white/10"
+            }`}
+            aria-label="Account menu"
+          >
+            <div className="relative">
+              <UserRound className="w-5 h-5 lg:w-6 lg:h-6" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+            </div>
+          </button>
+        </div>
+      );
+    }
 
-        console.log("➕ Manually added test item");
-        alert("Test item added to localStorage");
-      }}
-      className="px-3 py-2 bg-green-500 text-white rounded text-xs"
-    >
-      Add Test Item
-    </button>
-    <button
-      onClick={() => {
-        localStorage.removeItem("sizzle_cart");
-        console.log("🗑️ Cleared localStorage cart");
-        alert("LocalStorage cart cleared");
-        window.location.reload();
-      }}
-      className="px-3 py-2 bg-red-500 text-white rounded text-xs"
-    >
-      Clear localStorage
-    </button>
-  </div>;
+    return (
+      <button
+        id="user-icon"
+        onClick={handleUserClick}
+        className={`p-1.5 rounded-full transition-colors ${
+          scrolled
+            ? "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            : "text-white hover:text-gray-200 hover:bg-white/10"
+        }`}
+        aria-label="Account menu"
+      >
+        <UserRound className="w-5 h-5 lg:w-6 lg:h-6" />
+      </button>
+    );
+  };
+
+  // Render user icon for mobile
+  const renderMobileUserIcon = () => {
+    if (authLoading) {
+      return (
+        <div className="p-2">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-white rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        onClick={handleUserClick}
+        className={`p-2 relative ${scrolled ? "text-[#04322f]" : "text-white"}`}
+        aria-label="Account menu"
+      >
+        <UserRound className="w-5 h-5" />
+        {isAuthenticated && (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+        )}
+      </button>
+    );
+  };
 
   return (
     <>
@@ -345,7 +300,14 @@ const Header: React.FC = () => {
 
             {/* Cart Button */}
             <button
-              onClick={() => setCartOpen(true)}
+              onClick={() => {
+                // If not authenticated, show login modal instead of cart
+                if (!isAuthenticated) {
+                  setLoginOpen(true); // Show login modal
+                  return;
+                }
+                setCartOpen(true); // Show cart modal
+              }}
               className="relative p-1.5 group"
               aria-label="Shopping Cart"
             >
@@ -366,44 +328,36 @@ const Header: React.FC = () => {
               </div>
             </button>
 
-            {/* User Button with Dropdown - ALWAYS ACTIVE */}
+            {/* User Button with Dropdown */}
             <div className="relative">
-              <button
-                id="user-icon"
-                onClick={handleUserClick}
-                className={`p-1.5 rounded-full transition-colors relative ${
-                  scrolled
-                    ? "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                    : "text-white hover:text-gray-200 hover:bg-white/10"
-                } ${authLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-                aria-label="Account menu"
-                disabled={authLoading}
-              >
-                <UserRound className="w-5 h-5 lg:w-6 lg:h-6" />
-                {/* Green dot when authenticated */}
-                {isAuthenticated && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></div>
-                )}
-              </button>
+              {renderUserIcon()}
 
-              {/* User Dropdown Menu - ALWAYS SHOWS OPTIONS */}
+              {/* User Dropdown Menu */}
               {userDropdownOpen && (
                 <div
                   id="user-dropdown"
-                  className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl py-3 z-50 border border-gray-200"
+                  className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl py-3 z-50 border border-gray-200 animate-in slide-in-from-top-2 duration-200"
                 >
                   {isAuthenticated ? (
                     <>
                       {/* User Info */}
                       <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-gray-900 truncate">
-                          {getUserDisplayName()}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1 truncate">
-                          {user?.email}
-                        </p>
-                        <div className="text-xs text-green-600 mt-1">
-                          ✓ Signed in
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-linear-to-r from-[#04322f] to-[#b94e31] flex items-center justify-center text-white font-bold">
+                            {getUserDisplayName().charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {getUserDisplayName()}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1 truncate">
+                              {user?.email}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-green-600 mt-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span>Signed in</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -411,38 +365,22 @@ const Header: React.FC = () => {
                       <div className="py-2">
                         <a
                           href="/profile"
-                          className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors hover:text-[#04322f]"
                           onClick={() => setUserDropdownOpen(false)}
                         >
                           <User className="w-4 h-4" />
                           <span>My Profile</span>
+                          <ChevronRight className="w-4 h-4 ml-auto text-gray-400" />
                         </a>
 
                         <a
                           href="/orders"
-                          className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors hover:text-[#04322f]"
                           onClick={() => setUserDropdownOpen(false)}
                         >
                           <Package className="w-4 h-4" />
                           <span>My Orders</span>
-                        </a>
-
-                        <a
-                          href="/wishlist"
-                          className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                          onClick={() => setUserDropdownOpen(false)}
-                        >
-                          <Heart className="w-4 h-4" />
-                          <span>Wishlist</span>
-                        </a>
-
-                        <a
-                          href="/settings"
-                          className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                          onClick={() => setUserDropdownOpen(false)}
-                        >
-                          <Settings className="w-4 h-4" />
-                          <span>Settings</span>
+                          <ChevronRight className="w-4 h-4 ml-auto text-gray-400" />
                         </a>
                       </div>
 
@@ -459,7 +397,7 @@ const Header: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      {/* Login/Register Section - Always shown when not authenticated */}
+                      {/* Login/Register Section */}
                       <div className="px-4 py-3 border-b border-gray-100">
                         <p className="text-sm font-semibold text-gray-900">
                           Welcome to Sizzle
@@ -472,18 +410,24 @@ const Header: React.FC = () => {
                       <div className="py-2">
                         <button
                           onClick={handleLoginClick}
-                          className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-between w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors hover:text-[#04322f]"
                         >
-                          <User className="w-4 h-4" />
-                          <span>Sign In</span>
+                          <div className="flex items-center gap-3">
+                            <User className="w-4 h-4" />
+                            <span>Sign In</span>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
                         </button>
 
                         <button
                           onClick={handleRegisterClick}
-                          className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors mt-1"
+                          className="flex items-center justify-between w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors hover:text-[#04322f] mt-1"
                         >
-                          <User className="w-4 h-4" />
-                          <span>Create Account</span>
+                          <div className="flex items-center gap-3">
+                            <User className="w-4 h-4" />
+                            <span>Create Account</span>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
                         </button>
                       </div>
                     </>
@@ -535,6 +479,9 @@ const Header: React.FC = () => {
                 </div>
               )}
             </button>
+
+            {/* Mobile User Icon */}
+            <div className="relative">{renderMobileUserIcon()}</div>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -697,7 +644,7 @@ const Header: React.FC = () => {
 
       {/* Search Overlay */}
       {searchOpen && (
-        <div className="fixed inset-0 z-120">
+        <div className="fixed inset-0 z-50">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50"
@@ -731,6 +678,117 @@ const Header: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* DEBUG PANEL - TEMPORARY */}
+      {showDebug && (
+        <div className="fixed bottom-4 right-4 z-9999 bg-white p-4 rounded-lg shadow-2xl border-2 border-blue-500 max-w-sm">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-bold text-blue-600">🛒 Cart Debug</h3>
+            <button
+              onClick={() => setShowDebug(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="font-medium">Redux Items:</span>
+              <span className="text-blue-600 font-bold">{totalItems}</span>
+            </div>
+
+            <div className="flex justify-between">
+              <span className="font-medium">Redux Price:</span>
+              <span className="text-green-600 font-bold">
+                ${totalPrice.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex justify-between">
+              <span className="font-medium">Cart Array:</span>
+              <span className="font-bold">{cartItems?.length || 0}</span>
+            </div>
+
+            <div className="flex justify-between">
+              <span className="font-medium">Auth Status:</span>
+              <span
+                className={`font-bold ${
+                  isAuthenticated ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {isAuthenticated ? "Logged In" : "Logged Out"}
+              </span>
+            </div>
+
+            {isAuthenticated && user && (
+              <div className="flex justify-between">
+                <span className="font-medium">User:</span>
+                <span className="text-blue-600 font-bold truncate max-w-[150px]">
+                  {user.email}
+                </span>
+              </div>
+            )}
+
+            <div className="border-t pt-2 mt-2 space-y-2">
+              <button
+                onClick={() => {
+                  const saved = localStorage.getItem("cart");
+                  console.log("📦 localStorage cart:", saved);
+                  if (saved) {
+                    const parsed = JSON.parse(saved);
+                    console.log("📦 Parsed:", parsed);
+                    alert(
+                      `localStorage has ${
+                        parsed.items?.length || 0
+                      } items\nTotal: $${parsed.totalPrice || 0}`
+                    );
+                  } else {
+                    alert("No cart in localStorage");
+                  }
+                }}
+                className="w-full px-3 py-1.5 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+              >
+                Check localStorage
+              </button>
+
+              <button
+                onClick={() => {
+                  console.log("🔄 Redux cart state:", {
+                    totalItems,
+                    totalPrice,
+                    items: cartItems,
+                  });
+                  alert(
+                    `Redux State:\nItems: ${totalItems}\nPrice: $${totalPrice.toFixed(
+                      2
+                    )}\nArray Length: ${cartItems?.length || 0}`
+                  );
+                }}
+                className="w-full px-3 py-1.5 bg-green-500 text-white rounded text-xs hover:bg-green-600"
+              >
+                Log Redux State
+              </button>
+
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full px-3 py-1.5 bg-orange-500 text-white rounded text-xs hover:bg-orange-600"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Toggle Button - Click to show/hide debug panel */}
+      <button
+        onClick={() => setShowDebug(!showDebug)}
+        className="fixed bottom-4 left-4 z-9999 bg-blue-500 text-white p-3 rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+        title="Toggle Cart Debug"
+      >
+        🛒
+      </button>
 
       {/* Modals */}
       <CartModal isOpen={cartOpen} onClose={() => setCartOpen(false)} />
