@@ -1,6 +1,6 @@
 // src/Store/Slices/authSlice.ts
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { supabase } from "../../Lib/supabase";
+import { supabase } from "../../Auth/supabase";
 import type { AuthState, User } from "../../Types/types";
 
 const initialState: AuthState = {

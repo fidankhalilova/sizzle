@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../Store/hooks";
 import { checkAuth } from "../../Store/Slices/authSlice";
-import { supabase } from "../../Lib/supabase";
+import { supabase } from "../../Auth/supabase";
 
 const DebugAuth: React.FC = () => {
   const dispatch = useAppDispatch();

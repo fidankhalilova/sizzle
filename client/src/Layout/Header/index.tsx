@@ -28,7 +28,7 @@ const Header: React.FC = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [showDebug, setShowDebug] = useState<boolean>(false);
+  // const [showDebug, setShowDebug] = useState<boolean>(false);
 
   // Redux hooks
   const dispatch = useAppDispatch();
@@ -38,7 +38,7 @@ const Header: React.FC = () => {
     isLoading: authLoading,
   } = useAppSelector((state) => state.auth);
   const {
-    items: cartItems,
+    //    items: cartItems,
     totalItems,
     totalPrice,
   } = useAppSelector((state) => state.cart);
@@ -374,7 +374,7 @@ const Header: React.FC = () => {
                         </a>
 
                         <a
-                          href="/orders"
+                          href="/orders" // Changed from /orders
                           className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors hover:text-[#04322f]"
                           onClick={() => setUserDropdownOpen(false)}
                         >
@@ -680,7 +680,7 @@ const Header: React.FC = () => {
       )}
 
       {/* DEBUG PANEL - TEMPORARY */}
-      {showDebug && (
+      {/* {showDebug && (
         <div className="fixed bottom-4 right-4 z-9999 bg-white p-4 rounded-lg shadow-2xl border-2 border-blue-500 max-w-sm">
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-sm font-bold text-blue-600">🛒 Cart Debug</h3>
@@ -779,16 +779,16 @@ const Header: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Debug Toggle Button - Click to show/hide debug panel */}
-      <button
+      {/* <button
         onClick={() => setShowDebug(!showDebug)}
         className="fixed bottom-4 left-4 z-9999 bg-blue-500 text-white p-3 rounded-full shadow-lg hover:bg-blue-600 transition-colors"
         title="Toggle Cart Debug"
       >
         🛒
-      </button>
+      </button> */}
 
       {/* Modals */}
       <CartModal isOpen={cartOpen} onClose={() => setCartOpen(false)} />

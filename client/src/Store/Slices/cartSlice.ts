@@ -263,7 +263,7 @@ const cartSlice = createSlice({
     },
 
     // Save item to pending (for non-authenticated users)
-    addToPending: (state, action: PayloadAction<CartItem>) => {
+    addToPending: (_state, action: PayloadAction<CartItem>) => {
       const pendingItems = loadPendingItems();
       const newItem = action.payload;
 

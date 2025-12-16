@@ -7,7 +7,7 @@ import {
   setUserCart,
   clearUserCart,
 } from "../Store/Slices/cartSlice";
-import { supabase } from "../Lib/supabase";
+import { supabase } from "../Auth/supabase";
 
 interface AuthProviderProps {
   children: React.ReactNode;

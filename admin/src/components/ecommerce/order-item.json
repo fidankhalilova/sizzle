@@ -1,0 +1,29 @@
+{
+  "collectionName": "components_ecommerce_order_items",
+  "info": {
+    "displayName": "orderItem",
+    "icon": "code"
+  },
+  "options": {},
+  "attributes": {
+    "productId": {
+      "type": "integer"
+    },
+    "productName": {
+      "type": "string"
+    },
+    "price": {
+      "type": "decimal"
+    },
+    "quantity": {
+      "type": "integer"
+    },
+    "size": {
+      "type": "string"
+    },
+    "color": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}

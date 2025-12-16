@@ -10,12 +10,9 @@ import Register from "./Features/Pages/Register";
 import Login from "./Features/Pages/Login";
 import ShopDetail from "./Features/Pages/ShopDetail";
 import BlogDetail from "./Features/Pages/BlogDetail";
-// import Profile from "./Features/Pages/Profile";
-// import Orders from "./Features/Pages/Orders";
-// import Wishlist from "./Features/Pages/Wishlist";
-// import Settings from "./Features/Pages/Settings";
-// import Checkout from "./Features/Pages/Checkout";
 import ProtectedRoute from "./Features/Components/ProtectRoute";
+import Checkout from "./Features/Pages/Checkout";
+import Orders from "./Features/Pages/Orders";
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +39,7 @@ export const router = createBrowserRouter([
         path: "/contact-us",
         element: <ContactUs />,
       },
+      // Updated: Dynamic product route with :id parameter
       {
         path: "/product/:id",
         element: <ShopDetail />,
@@ -50,7 +48,6 @@ export const router = createBrowserRouter([
         path: "/blog/:id",
         element: <BlogDetail />,
       },
-      // Public auth routes (should redirect if already authenticated)
       {
         path: "/login",
         element: (
@@ -67,47 +64,22 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // Protected routes (require authentication)
-      // {
-      //   path: "/profile",
-      //   element: (
-      //     <ProtectedRoute>
-      //       <Profile />
-      //     </ProtectedRoute>
-      //   ),
-      // },
-      // {
-      //   path: "/orders",
-      //   element: (
-      //     <ProtectedRoute>
-      //       <Orders />
-      //     </ProtectedRoute>
-      //   ),
-      // },
-      // {
-      //   path: "/wishlist",
-      //   element: (
-      //     <ProtectedRoute>
-      //       <Wishlist />
-      //     </ProtectedRoute>
-      //   ),
-      // },
-      // {
-      //   path: "/settings",
-      //   element: (
-      //     <ProtectedRoute>
-      //       <Settings />
-      //     </ProtectedRoute>
-      //   ),
-      // },
-      // {
-      //   path: "/checkout",
-      //   element: (
-      //     <ProtectedRoute>
-      //       <Checkout />
-      //     </ProtectedRoute>
-      //   ),
-      // },
+      {
+        path: "/checkout",
+        element: (
+          <ProtectedRoute requireAuth={true}>
+            <Checkout />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/orders",
+        element: (
+          <ProtectedRoute requireAuth={true}>
+            <Orders />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 ]);

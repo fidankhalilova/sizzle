@@ -550,6 +550,45 @@ export interface ApiGenderGender extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiOrderOrder extends Struct.CollectionTypeSchema {
+  collectionName: 'orders';
+  info: {
+    displayName: 'order';
+    pluralName: 'orders';
+    singularName: 'order';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    items: Schema.Attribute.JSON;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::order.order'> &
+      Schema.Attribute.Private;
+    orderNumber: Schema.Attribute.String;
+    orderStatus: Schema.Attribute.Enumeration<
+      ['pending', 'processing', 'shipped', 'delivered', 'cancelled']
+    >;
+    paymentMethod: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    shipping: Schema.Attribute.Decimal;
+    shippingAddress: Schema.Attribute.Component<
+      'checkout.shipping-address',
+      false
+    >;
+    subtotal: Schema.Attribute.Decimal;
+    tax: Schema.Attribute.Decimal;
+    total: Schema.Attribute.Decimal;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userEmail: Schema.Attribute.Email;
+  };
+}
+
 export interface ApiProductProduct extends Struct.CollectionTypeSchema {
   collectionName: 'products';
   info: {
@@ -1158,6 +1197,7 @@ declare module '@strapi/strapi' {
       'api::category.category': ApiCategoryCategory;
       'api::color.color': ApiColorColor;
       'api::gender.gender': ApiGenderGender;
+      'api::order.order': ApiOrderOrder;
       'api::product.product': ApiProductProduct;
       'api::size.size': ApiSizeSize;
       'api::tag.tag': ApiTagTag;

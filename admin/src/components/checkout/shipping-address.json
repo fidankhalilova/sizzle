@@ -1,0 +1,35 @@
+{
+  "collectionName": "components_checkout_shipping_addresses",
+  "info": {
+    "displayName": "shippingAddress",
+    "icon": "paperPlane"
+  },
+  "options": {},
+  "attributes": {
+    "fullName": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "zipCode": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}

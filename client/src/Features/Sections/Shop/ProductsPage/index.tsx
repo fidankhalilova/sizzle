@@ -12,6 +12,7 @@ import type { Product } from "../../../../Types/types";
 import { useAppDispatch, useAppSelector } from "../../../../Store/hooks";
 import { addToCart } from "../../../../Store/Slices/cartSlice";
 import LoginModal from "../../../Components/LoginModal";
+import { useNavigate } from "react-router";
 
 const ProductsPage: React.FC = () => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -28,6 +29,117 @@ const ProductsPage: React.FC = () => {
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingCartItem, setPendingCartItem] = useState<any>(null);
+  const navigate = useNavigate();
+
+  // Also update your handleProductClick to add logging:
+  const handleProductClick = (productId: number, productName: string) => {
+    console.log(`🔗 Navigating to product: ${productName} (ID: ${productId})`);
+    navigate(`/product/${productId}`);
+  };
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        console.log("Fetching products from Strapi...");
+
+        let data = await productService.getAllProducts();
+
+        if (data.length === 0 || !data[0]?.image) {
+          console.log("Trying alternative population method...");
+          data = await productService.getAllProducts();
+        }
+
+        console.log("Products loaded:", data);
+
+        // 🔍 IMPORTANT DEBUG INFO
+        console.log("═══════════════════════════════════════");
+        console.log("📋 AVAILABLE PRODUCT IDs:");
+        data.forEach((p) => {
+          console.log(`   ✓ ID: ${p.id} → Name: ${p.name}`);
+        });
+        console.log("═══════════════════════════════════════");
+
+        if (data.length === 0) {
+          throw new Error("No products loaded");
+        }
+
+        setProducts(data);
+
+        // Rest of your existing code for initializing selectedOptions...
+        const initialSelectedOptions: {
+          [key: number]: { size: string; color: string };
+        } = {};
+        data.forEach((product) => {
+          const sizes = Array.isArray(product.sizes)
+            ? product.sizes
+            : ["M", "L", "XL"];
+          const colors = Array.isArray(product.colors)
+            ? product.colors
+            : ["Black", "White"];
+
+          initialSelectedOptions[product.id] = {
+            size: sizes[0] || "M",
+            color: colors[0] || "Black",
+          };
+        });
+        setSelectedOptions(initialSelectedOptions);
+
+        // Extract filter options...
+        const categories = Array.from(
+          new Set(data.map((p) => p.category).filter(Boolean))
+        );
+        const colors = Array.from(
+          new Set(
+            data
+              .flatMap((p) => (Array.isArray(p.colors) ? p.colors : []))
+              .filter(Boolean)
+          )
+        );
+        const sizes = Array.from(
+          new Set(
+            data
+              .flatMap((p) => (Array.isArray(p.sizes) ? p.sizes : []))
+              .filter(Boolean)
+          )
+        );
+        const genders = Array.from(
+          new Set(data.map((p) => p.gender).filter(Boolean))
+        );
+
+        const finalColors =
+          colors.length > 0
+            ? colors
+            : ["Black", "White", "Red", "Blue", "Green", "Brown"];
+        const finalSizes =
+          sizes.length > 0 ? sizes : ["XS", "S", "M", "L", "XL"];
+        const finalCategories =
+          categories.length > 0
+            ? categories
+            : ["Dress", "Top", "Outerwear", "Swimwear"];
+        const finalGenders =
+          genders.length > 0 ? genders : ["Women", "Men", "Unisex"];
+
+        setFilterOptions({
+          categories: finalCategories,
+          colors: finalColors,
+          sizes: finalSizes,
+          genders: finalGenders,
+        });
+
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        setError(
+          "Failed to load products from Strapi. Please check your API connection."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   const [filters, setFilters] = useState({
     category: "",
@@ -63,7 +175,7 @@ const ProductsPage: React.FC = () => {
 
         if (data.length === 0 || !data[0]?.image) {
           console.log("Trying alternative population method...");
-          data = await productService.getAllProductsDeep();
+          data = await productService.getAllProducts();
         }
 
         console.log("Products loaded:", data);
@@ -594,25 +706,6 @@ const ProductsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Promo Banner */}
-            <div className="bg-linear-to-r from-[#495f11] to-[#04322f] rounded-xl md:rounded-2xl p-3 md:p-4 mt-4 md:mt-8">
-              <h4 className="text-white font-bold text-base md:text-lg mb-1.5 md:mb-2">
-                Pro Apps!
-              </h4>
-              <p className="text-white/90 text-xs md:text-sm mb-2 md:mb-3">
-                Get exclusive discounts with code
-              </p>
-              <div className="bg-white/20 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg">
-                <code className="text-white font-mono font-bold text-sm md:text-base">
-                  WEBFLOW20
-                </code>
-              </div>
-              <div className="mt-3 md:mt-4 text-white/80 text-xs md:text-sm">
-                <p className="font-medium">Ice Wear</p>
-                <p>Ty Wear</p>
-              </div>
-            </div>
-
             {/* Mobile Apply Filters Button */}
             {showMobileFilters && (
               <div className="sticky bottom-0 left-0 right-0 bg-gray-50 pt-4 border-t">
@@ -643,204 +736,210 @@ const ProductsPage: React.FC = () => {
               <ChevronDown className="absolute right-3 md:right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            {filteredProducts.map((product, index) => {
+              if (!product) return null;
 
-          {filteredProducts.length === 0 ? (
-            <div className="text-center py-12 md:py-16">
-              <p className="text-gray-500 text-base md:text-lg">
-                No products found matching your criteria.
-              </p>
-              <button
-                onClick={clearFilters}
-                className="mt-4 px-5 md:px-6 py-2.5 md:py-3 bg-[#04322f] text-white rounded-full font-medium hover:bg-[#03201e] transition-colors text-sm md:text-base"
-              >
-                Clear Filters
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {filteredProducts.map((product, index) => {
-                if (!product) return null;
+              const selected = selectedOptions[product.id];
+              const isAdding = addingToCart === product.id;
 
-                const selected = selectedOptions[product.id];
-                const isAdding = addingToCart === product.id;
-
-                return (
-                  <div
-                    key={product.id}
-                    id={`product-${product.id}`}
-                    className="w-full group"
-                    onMouseEnter={() => setHoveredIndex(index)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <div className="rounded-3xl md:rounded-4xl relative overflow-hidden">
-                      {/* Image Container */}
-                      <div className="w-full h-[420px] relative">
-                        <img
-                          src={product.image || fallbackImage}
-                          alt={product.name || "Product"}
-                          className="w-full h-[420px] object-cover transition-transform duration-500 group-hover:scale-105"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = fallbackImage;
-                          }}
-                        />
-                      </div>
-
-                      {/* Hover overlay */}
-                      <div
-                        className={`absolute inset-0 bg-black/10 rounded-3xl md:rounded-4xl transition-all duration-300 ${
-                          hoveredIndex === index ? "opacity-100" : "opacity-0"
-                        }`}
+              return (
+                <div
+                  key={product.id}
+                  id={`product-${product.id}`}
+                  className="w-full group"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                >
+                  <div className="rounded-3xl md:rounded-4xl relative overflow-hidden">
+                    {/* Image Container - NOW CLICKABLE */}
+                    <div
+                      className="w-full h-[420px] relative cursor-pointer"
+                      onClick={(e) => {
+                        // Prevent navigation if clicking on controls
+                        if (
+                          (e.target as HTMLElement).closest("select, button")
+                        ) {
+                          return;
+                        }
+                        handleProductClick(product.id, product.name);
+                      }}
+                    >
+                      <img
+                        src={product.image || fallbackImage}
+                        alt={product.name || "Product"}
+                        className="w-full h-[420px] object-cover transition-transform duration-500 group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = fallbackImage;
+                        }}
                       />
+                    </div>
 
-                      {/* Hover controls */}
-                      <div
-                        className={`absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4 flex justify-between items-center transition-all duration-300 ${
-                          hoveredIndex === index
-                            ? "opacity-100 translate-y-0"
-                            : "opacity-0 translate-y-3 md:translate-y-4"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-1.5 md:gap-2 w-full max-w-40 md:max-w-[120px]">
-                          {/* Color Selector - Only show if product has colors */}
-                          {product.colors && product.colors.length > 0 ? (
-                            <select
-                              value={selected?.color || ""}
-                              onChange={(e) =>
-                                handleSelectOption(
-                                  product.id,
-                                  "color",
-                                  e.target.value
-                                )
-                              }
-                              className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-white text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#04322f]"
-                              disabled={isAdding}
-                            >
-                              {product.colors.map((color) => (
-                                <option key={color} value={color}>
-                                  {color}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <div className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-gray-100 text-xs md:text-sm w-full text-gray-500">
-                              No colors
-                            </div>
-                          )}
+                    {/* Hover overlay */}
+                    <div
+                      className={`absolute inset-0 bg-black/10 rounded-3xl md:rounded-4xl transition-all duration-300 pointer-events-none ${
+                        hoveredIndex === index ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
 
-                          {/* Size Selector - Only show if product has sizes */}
-                          {product.sizes && product.sizes.length > 0 ? (
-                            <select
-                              value={selected?.size || ""}
-                              onChange={(e) =>
-                                handleSelectOption(
-                                  product.id,
-                                  "size",
-                                  e.target.value
-                                )
-                              }
-                              className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-white text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#04322f]"
-                              disabled={isAdding}
-                            >
-                              {product.sizes.map((size) => (
-                                <option key={size} value={size}>
-                                  {size}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <div className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-gray-100 text-xs md:text-sm w-full text-gray-500">
-                              No sizes
-                            </div>
-                          )}
-                        </div>
+                    {/* Hover controls */}
+                    <div
+                      className={`absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4 flex justify-between items-center transition-all duration-300 ${
+                        hoveredIndex === index
+                          ? "opacity-100 translate-y-0"
+                          : "opacity-0 translate-y-3 md:translate-y-4"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-1.5 md:gap-2 w-full max-w-40 md:max-w-[120px]">
+                        {/* Color Selector */}
+                        {product.colors && product.colors.length > 0 ? (
+                          <select
+                            value={selected?.color || ""}
+                            onChange={(e) => {
+                              e.stopPropagation(); // Prevent image click
+                              handleSelectOption(
+                                product.id,
+                                "color",
+                                e.target.value
+                              );
+                            }}
+                            onClick={(e) => e.stopPropagation()} // Prevent image click
+                            className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-white text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#04322f]"
+                            disabled={isAdding}
+                          >
+                            {product.colors.map((color) => (
+                              <option key={color} value={color}>
+                                {color}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-gray-100 text-xs md:text-sm w-full text-gray-500">
+                            No colors
+                          </div>
+                        )}
 
-                        {/* Add to Cart Button */}
-                        <button
-                          onClick={() => handleAddToCart(product)}
-                          disabled={
-                            !selected?.size || !selected?.color || isAdding
-                          }
-                          className={`h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 flex items-center justify-center rounded-full transition-all duration-300 cursor-pointer shadow-lg ${
-                            selected?.size && selected?.color && !isAdding
-                              ? "bg-[#04322f] hover:bg-[#03201e] text-white"
-                              : "bg-gray-300 cursor-not-allowed text-gray-500"
-                          }`}
-                          title={
-                            selected?.size && selected?.color && !isAdding
-                              ? "Add to cart"
-                              : !selected?.size || !selected?.color
-                              ? "Please select size and color"
-                              : "Adding..."
-                          }
-                        >
-                          {isAdding ? (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                          ) : (
-                            <ShoppingBag className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7" />
-                          )}
-                        </button>
+                        {/* Size Selector */}
+                        {product.sizes && product.sizes.length > 0 ? (
+                          <select
+                            value={selected?.size || ""}
+                            onChange={(e) => {
+                              e.stopPropagation(); // Prevent image click
+                              handleSelectOption(
+                                product.id,
+                                "size",
+                                e.target.value
+                              );
+                            }}
+                            onClick={(e) => e.stopPropagation()} // Prevent image click
+                            className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-white text-xs md:text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#04322f]"
+                            disabled={isAdding}
+                          >
+                            {product.sizes.map((size) => (
+                              <option key={size} value={size}>
+                                {size}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-2xl md:rounded-3xl bg-gray-100 text-xs md:text-sm w-full text-gray-500">
+                            No sizes
+                          </div>
+                        )}
                       </div>
 
-                      {/* Selected options badge */}
-                      {selected?.size && selected?.color && (
-                        <div className="absolute top-3 left-3">
-                          <div className="flex gap-1 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium">
-                            <span>{selected.size}</span>
-                            <span className="text-gray-400">•</span>
-                            <span
-                              className="w-3 h-3 rounded-full inline-block border"
-                              style={{
-                                backgroundColor: selected.color.toLowerCase(),
-                                borderColor:
-                                  selected.color === "White"
-                                    ? "#d1d5db"
-                                    : "transparent",
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
+                      {/* Add to Cart Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent image click
+                          handleAddToCart(product);
+                        }}
+                        disabled={
+                          !selected?.size || !selected?.color || isAdding
+                        }
+                        className={`h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 flex items-center justify-center rounded-full transition-all duration-300 cursor-pointer shadow-lg ${
+                          selected?.size && selected?.color && !isAdding
+                            ? "bg-[#04322f] hover:bg-[#03201e] text-white"
+                            : "bg-gray-300 cursor-not-allowed text-gray-500"
+                        }`}
+                        title={
+                          selected?.size && selected?.color && !isAdding
+                            ? "Add to cart"
+                            : !selected?.size || !selected?.color
+                            ? "Please select size and color"
+                            : "Adding..."
+                        }
+                      >
+                        {isAdding ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        ) : (
+                          <ShoppingBag className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7" />
+                        )}
+                      </button>
                     </div>
 
-                    {/* Product Info */}
-                    <div className="mt-2.5 md:mt-3 lg:mt-4">
-                      <h4 className="text-base md:text-lg lg:text-xl font-semibold text-[#04322f] hover:text-[#b94e31] duration-200 cursor-pointer line-clamp-1">
-                        {product.name || "Unnamed Product"}
-                      </h4>
-                      <p className="text-gray-500 text-xs md:text-sm mt-0.5 line-clamp-1">
-                        {product.category || "Uncategorized"}
-                      </p>
-                      <h5 className="text-sm md:text-base lg:text-lg font-medium text-[#04322f] mt-1.5 md:mt-2">
-                        {product.price || "$ 0.00 USD"}
-                      </h5>
-
-                      {/* Selected options display */}
-                      {selected && selected.size && selected.color && (
-                        <div className="mt-1 flex flex-wrap gap-1 text-xs text-gray-600">
-                          <span className="px-2 py-0.5 bg-gray-100 rounded">
-                            Size: {selected.size}
-                          </span>
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded">
-                            Color: {selected.color}
-                            <span
-                              className="w-3 h-3 rounded-full inline-block border"
-                              style={{
-                                backgroundColor: selected.color.toLowerCase(),
-                                borderColor:
-                                  selected.color === "White"
-                                    ? "#d1d5db"
-                                    : "transparent",
-                              }}
-                            />
-                          </span>
+                    {/* Selected options badge */}
+                    {selected?.size && selected?.color && (
+                      <div className="absolute top-3 left-3 pointer-events-none">
+                        <div className="flex gap-1 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium">
+                          <span>{selected.size}</span>
+                          <span className="text-gray-400">•</span>
+                          <span
+                            className="w-3 h-3 rounded-full inline-block border"
+                            style={{
+                              backgroundColor: selected.color.toLowerCase(),
+                              borderColor:
+                                selected.color === "White"
+                                  ? "#d1d5db"
+                                  : "transparent",
+                            }}
+                          />
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  {/* Product Info - ALSO CLICKABLE */}
+                  <div
+                    className="mt-2.5 md:mt-3 lg:mt-4 cursor-pointer"
+                    onClick={() => handleProductClick(product.id, product.name)}
+                  >
+                    <h4 className="text-base md:text-lg lg:text-xl font-semibold text-[#04322f] hover:text-[#b94e31] duration-200 line-clamp-1">
+                      {product.name || "Unnamed Product"}
+                    </h4>
+                    <p className="text-gray-500 text-xs md:text-sm mt-0.5 line-clamp-1">
+                      {product.category || "Uncategorized"}
+                    </p>
+                    <h5 className="text-sm md:text-base lg:text-lg font-medium text-[#04322f] mt-1.5 md:mt-2">
+                      {product.price || "$ 0.00 USD"}
+                    </h5>
+
+                    {/* Selected options display */}
+                    {selected && selected.size && selected.color && (
+                      <div className="mt-1 flex flex-wrap gap-1 text-xs text-gray-600">
+                        <span className="px-2 py-0.5 bg-gray-100 rounded">
+                          Size: {selected.size}
+                        </span>
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded">
+                          Color: {selected.color}
+                          <span
+                            className="w-3 h-3 rounded-full inline-block border"
+                            style={{
+                              backgroundColor: selected.color.toLowerCase(),
+                              borderColor:
+                                selected.color === "White"
+                                  ? "#d1d5db"
+                                  : "transparent",
+                            }}
+                          />
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
