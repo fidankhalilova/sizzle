@@ -3,7 +3,7 @@ import MyOrders from "../Sections/Orders/OrdersPage";
 
 const OrdersTemplate = () => {
   return (
-    <div>
+    <div className="container mx-auto px-12">
       <OrdersHeroBanner />
       <MyOrders />
     </div>
