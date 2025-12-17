@@ -95,16 +95,32 @@ const MyOrders: React.FC = () => {
 
   // Fetch orders function
   const fetchOrders = async () => {
-    if (!user?.email) return;
+    if (!user?.email) {
+      setError("No user email found");
+      setLoading(false);
+      return;
+    }
 
     try {
       setError(null);
+      console.log("🔄 Fetching orders for:", user.email);
+
       const fetchedOrders = await orderService.getOrdersByEmail(user.email);
-      setOrders(fetchedOrders);
-      setFilteredOrders(fetchedOrders);
+      console.log("📦 Fetched orders:", fetchedOrders);
+
+      if (fetchedOrders.length === 0) {
+        console.log("No orders found for user");
+        setOrders([]);
+        setFilteredOrders([]);
+      } else {
+        setOrders(fetchedOrders);
+        setFilteredOrders(fetchedOrders);
+      }
     } catch (err: any) {
       console.error("Error fetching orders:", err);
       setError("Failed to load orders. Please try again.");
+      setOrders([]);
+      setFilteredOrders([]);
     } finally {
       setLoading(false);
     }
@@ -172,15 +188,24 @@ const MyOrders: React.FC = () => {
 
   // Auto-refresh every 30 seconds to catch Strapi updates
   useEffect(() => {
-    if (!isAuthenticated || !user?.email) return;
+    if (!isAuthenticated || !user?.email) {
+      navigate("/login");
+      return;
+    }
 
+    // Load immediately
+    fetchOrders();
+
+    // Set up auto-refresh
     const interval = setInterval(() => {
-      console.log("Auto-refreshing orders...");
-      refreshOrders();
-    }, 30000); // 30 seconds
+      if (!refreshing) {
+        console.log("🔄 Auto-refreshing orders...");
+        refreshOrders();
+      }
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, [user?.email, isAuthenticated, selectedStatus, searchQuery, sortBy]); // Add dependencies
+  }, [user?.email, isAuthenticated, navigate]);
 
   // Filter and sort orders
   useEffect(() => {

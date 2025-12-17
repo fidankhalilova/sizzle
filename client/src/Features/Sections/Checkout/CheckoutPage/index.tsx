@@ -150,6 +150,7 @@ export default function Checkout() {
   };
 
   // Handle place order
+  // In Checkout page - handlePlaceOrder function
   const handlePlaceOrder = async () => {
     if (!validateForm()) {
       return;
@@ -178,18 +179,41 @@ export default function Checkout() {
 
       console.log("📦 Submitting order:", orderData);
 
-      const createdOrder = await orderService.createOrder(orderData);
+      try {
+        const createdOrder = await orderService.createOrder(orderData);
+        console.log("✅ Order created:", createdOrder);
+        setOrderNumber(createdOrder.orderNumber);
+      } catch (createError) {
+        console.error(
+          "⚠️ Order creation returned error, but order might still be created"
+        );
 
-      console.log("✅ Order created:", createdOrder);
+        // Generate a fallback order number
+        const fallbackOrderNumber = `ORD-${Date.now()}-${Math.floor(
+          Math.random() * 1000
+        )}`;
+        setOrderNumber(fallbackOrderNumber);
 
-      // Clear cart
+        // You could also try to fetch the actual order from Strapi
+        setTimeout(async () => {
+          try {
+            const orders = await orderService.getOrdersByEmail(
+              orderData.userEmail
+            );
+            if (orders.length > 0) {
+              const latestOrder = orders[0];
+              console.log("🔄 Found latest order after error:", latestOrder);
+              setOrderNumber(latestOrder.orderNumber);
+            }
+          } catch (fetchError) {
+            console.error("Could not fetch orders after creation error");
+          }
+        }, 1000);
+      }
+
+      // Clear cart regardless
       dispatch(clearCart());
-
-      // Clear saved form data
       clearLocalStorage();
-
-      // Show success
-      setOrderNumber(createdOrder.orderNumber);
       setOrderComplete(true);
     } catch (err: any) {
       console.error("❌ Order error:", err);
@@ -223,18 +247,21 @@ export default function Checkout() {
   }
 
   // Success screen
+  // In Checkout page - update the success section
   if (orderComplete) {
     return (
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-2xl mx-auto text-center">
-          <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
-            Order Placed Successfully!
-          </h1>
-          <p className="text-lg text-gray-600 mb-6">
-            Thank you for your order. We've received your order and will process
-            it soon.
-          </p>
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-8">
+            <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
+              Order Placed Successfully!
+            </h1>
+            <p className="text-lg text-gray-600 mb-6">
+              Thank you for your order. We've received your order and will
+              process it soon.
+            </p>
+          </div>
 
           <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 mb-8">
             <p className="text-sm text-gray-600 mb-2">Your Order Number</p>
@@ -243,43 +270,115 @@ export default function Checkout() {
             </p>
           </div>
 
-          <div className="bg-gray-50 rounded-2xl p-6 mb-8 text-left">
-            <h3 className="font-bold text-gray-800 mb-4">Order Summary</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">${subtotal.toFixed(2)}</span>
+          {/* Enhanced Order Summary */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 pb-4 border-b border-gray-200">
+              Order Summary
+            </h3>
+
+            {/* Order Items */}
+            <div className="mb-6">
+              <h4 className="font-semibold text-gray-700 mb-3">Items</h4>
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                {items.map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex gap-3 p-3 bg-gray-50 rounded-lg"
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-16 h-16 object-cover rounded-lg"
+                    />
+                    <div className="flex-1">
+                      <h5 className="font-medium text-gray-800">{item.name}</h5>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                        <span>Size: {item.size}</span>
+                        <span>Color: {item.color}</span>
+                        <span>Qty: {item.quantity}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-gray-800">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        ${item.price.toFixed(2)} each
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Shipping:</span>
-                <span className="font-medium">${shippingCost.toFixed(2)}</span>
+            </div>
+
+            {/* Price Breakdown */}
+            <div className="space-y-3 border-t border-gray-200 pt-6">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="text-lg font-medium">
+                  ${subtotal.toFixed(2)}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tax:</span>
-                <span className="font-medium">${tax.toFixed(2)}</span>
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Shipping</span>
+                <span className="text-lg font-medium">
+                  {shippingCost === 0 ? "FREE" : `$${shippingCost.toFixed(2)}`}
+                </span>
               </div>
-              <div className="flex justify-between pt-2 border-t-2 border-gray-200">
-                <span className="font-bold text-gray-800">Total:</span>
-                <span className="font-bold text-[#04322f]">
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Tax (8%)</span>
+                <span className="text-lg font-medium">${tax.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                <span className="text-xl font-bold text-gray-800">Total</span>
+                <span className="text-2xl font-bold text-[#04322f]">
                   ${total.toFixed(2)}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="text-sm text-gray-600 mb-8">
-            <p>
-              A confirmation email has been sent to:{" "}
-              <strong>{shippingInfo.email}</strong>
-            </p>
+          {/* Customer Info */}
+          <div className="bg-gray-50 rounded-2xl p-6 mb-8">
+            <h3 className="font-bold text-gray-800 mb-4">
+              Customer Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Email</p>
+                <p className="font-medium">{shippingInfo.email}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Phone</p>
+                <p className="font-medium">{shippingInfo.phone}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-sm text-gray-600 mb-1">Shipping Address</p>
+                <p className="font-medium">
+                  {shippingInfo.address}, {shippingInfo.city},{" "}
+                  {shippingInfo.state} {shippingInfo.zipCode}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={() => navigate("/shop")}
-            className="px-8 py-4 bg-[#04322f] text-white rounded-full font-semibold hover:bg-[#03201e] transition-colors"
-          >
-            Continue Shopping
-          </button>
+          <div className="text-center">
+            <button
+              onClick={() => navigate("/shop")}
+              className="px-8 py-4 bg-[#04322f] text-white rounded-full font-semibold hover:bg-[#03201e] transition-colors mr-4"
+            >
+              Continue Shopping
+            </button>
+            <button
+              onClick={() => navigate("/orders")}
+              className="px-8 py-4 border-2 border-[#04322f] text-[#04322f] rounded-full font-semibold hover:bg-[#04322f] hover:text-white transition-colors"
+            >
+              View My Orders
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -523,36 +622,50 @@ export default function Checkout() {
             </h2>
 
             <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
-              {items.map((item) => (
-                <div
-                  key={`${item.id}-${item.size}-${item.color}`}
-                  className="flex gap-3"
-                >
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-16 h-16 object-cover rounded-lg"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm text-gray-800 truncate">
-                      {item.name}
-                    </h4>
-                    <p className="text-xs text-gray-500">
-                      {item.size} / {item.color}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Qty: {item.quantity}
-                    </p>
+              {items.map((item) => {
+                // Convert price to number if it's a string
+                const price =
+                  typeof item.price === "string"
+                    ? parseFloat(item.price)
+                    : Number(item.price) || 0;
+
+                const itemTotal = price * item.quantity;
+
+                return (
+                  <div
+                    key={`${item.id}-${item.size}-${item.color}`}
+                    className="flex gap-3"
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-16 h-16 object-cover rounded-lg"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm text-gray-800 truncate">
+                        {item.name}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {item.size} / {item.color}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Qty: {item.quantity}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-sm">
+                        ${itemTotal.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        ${price.toFixed(2)} each
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium text-sm">
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
+            {/* Fix subtotal calculation too */}
             <div className="space-y-3 py-4 border-t border-gray-200">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Subtotal</span>

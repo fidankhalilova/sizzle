@@ -6,6 +6,7 @@ import type {
   Order,
   ShippingAddress,
   OrderStatus,
+  OrderItem,
 } from "../Types/types";
 
 const API_URL = "http://localhost:1337/api";
@@ -152,31 +153,49 @@ const normalizeStatus = (status: any): OrderStatus => {
 
 export const orderService = {
   // Create new order
+  // Create new order - FIXED VERSION
   async createOrder(orderData: OrderInputData): Promise<Order> {
     try {
       console.log("📦 Creating order...", orderData);
 
       const orderNumber = generateOrderNumber();
 
-      // Try with orderStatus field first (most common in Strapi)
+      // IMPORTANT: Let's check what your Strapi orders schema actually looks like
+      // First, let's try to fetch the schema to see what fields exist
+      try {
+        const schemaCheck = await axios.get(
+          `${API_URL}/orders?pagination[pageSize]=1`
+        );
+        if (schemaCheck.data?.data?.[0]?.attributes) {
+          const sampleOrder = schemaCheck.data.data[0].attributes;
+          console.log("📋 Sample order fields:", Object.keys(sampleOrder));
+          console.log(
+            "📋 Sample order data:",
+            JSON.stringify(sampleOrder, null, 2)
+          );
+        }
+      } catch (schemaError: any) {
+        console.log("⚠️ Could not fetch sample order:", schemaError.message);
+      }
+
+      // Let's try different approaches
+      // Approach 1: Send data as-is
       const strapiOrderData = {
         data: {
           orderNumber: orderNumber,
           userEmail: orderData.userEmail,
+          orderStatus: "pending", // This might be the field name
 
-          // Use orderStatus instead of status
-          orderStatus: "pending",
-
-          // Send items as JSON string OR as array depending on your Strapi schema
-          items: JSON.stringify(orderData.items),
+          // Try sending items as array (not stringified)
+          items: orderData.items, // Try as array
 
           subtotal: Number(orderData.subtotal),
           shipping: Number(orderData.shipping),
           tax: Number(orderData.tax),
           total: Number(orderData.total),
 
-          // Send shippingAddress as object, not string
-          shippingAddress: orderData.shippingAddress,
+          // Try sending shippingAddress as object
+          shippingAddress: orderData.shippingAddress, // As object
 
           paymentMethod: orderData.paymentMethod,
           notes: orderData.notes || "",
@@ -190,105 +209,278 @@ export const orderService = {
 
       const response = await axios.post(`${API_URL}/orders`, strapiOrderData);
 
-      console.log("✅ Order created successfully:", response.data);
-
-      const attributes = response.data.data.attributes;
-      const actualStatus = normalizeStatus(
-        attributes.orderStatus || attributes.status || attributes.order_status
+      console.log(
+        "✅ Order created successfully - Raw response:",
+        response.data
       );
 
+      // Check the response structure
+      if (!response.data?.data) {
+        console.error("❌ No data in response:", response.data);
+        throw new Error("Invalid response from server");
+      }
+
+      const responseData = response.data.data;
+      const attributes = responseData.attributes || {};
+
+      console.log("📊 Response attributes:", attributes);
+
+      // Try to extract the actual status from the response
+      let actualStatus: OrderStatus = "pending";
+      if (attributes.orderStatus) {
+        actualStatus = normalizeStatus(attributes.orderStatus);
+      } else if (attributes.status) {
+        actualStatus = normalizeStatus(attributes.status);
+      }
+
+      // Try to extract items from response
+      let itemsFromResponse: OrderItem[] = [];
+      if (attributes.items) {
+        if (typeof attributes.items === "string") {
+          try {
+            itemsFromResponse = JSON.parse(attributes.items);
+          } catch (e) {
+            console.error("❌ Error parsing items string:", e);
+          }
+        } else if (Array.isArray(attributes.items)) {
+          itemsFromResponse = attributes.items;
+        }
+      }
+
+      // If no items from response, use original items
+      if (itemsFromResponse.length === 0) {
+        itemsFromResponse = orderData.items;
+      }
+
+      // Try to extract shipping address from response
+      let shippingAddressFromResponse: ShippingAddress =
+        orderData.shippingAddress;
+      if (attributes.shippingAddress) {
+        if (typeof attributes.shippingAddress === "string") {
+          try {
+            shippingAddressFromResponse = JSON.parse(
+              attributes.shippingAddress
+            );
+          } catch (e) {
+            console.error("❌ Error parsing shippingAddress string:", e);
+          }
+        } else if (
+          attributes.shippingAddress &&
+          typeof attributes.shippingAddress === "object"
+        ) {
+          shippingAddressFromResponse = attributes.shippingAddress;
+        }
+      }
+
       const createdOrder: Order = {
-        id: response.data.data.id,
-        orderNumber,
-        userEmail: orderData.userEmail,
+        id: responseData.id,
+        orderNumber: attributes.orderNumber || orderNumber,
+        userEmail: attributes.userEmail || orderData.userEmail,
         status: actualStatus,
-        items: orderData.items,
-        subtotal: orderData.subtotal,
-        shipping: orderData.shipping,
-        tax: orderData.tax,
-        total: orderData.total,
-        shippingAddress: orderData.shippingAddress,
-        paymentMethod: orderData.paymentMethod,
-        notes: orderData.notes,
-        createdAt: attributes?.createdAt || new Date().toISOString(),
+        items: itemsFromResponse,
+        subtotal: attributes.subtotal || orderData.subtotal,
+        shipping: attributes.shipping || orderData.shipping,
+        tax: attributes.tax || orderData.tax,
+        total: attributes.total || orderData.total,
+        shippingAddress: shippingAddressFromResponse,
+        paymentMethod: attributes.paymentMethod || orderData.paymentMethod,
+        notes: attributes.notes || orderData.notes,
+        createdAt: attributes.createdAt || new Date().toISOString(),
+        updatedAt: attributes.updatedAt,
       };
 
+      console.log("✅ Created order object:", createdOrder);
       return createdOrder;
     } catch (error: any) {
       console.error("❌ Error creating order:", error);
 
-      if (error.response?.status === 400) {
-        console.error("❌ Bad Request - Check field names in Strapi");
-        console.error("Error details:", error.response?.data);
+      // More detailed error logging
+      if (error.response) {
+        console.error("❌ Error status:", error.response.status);
+        console.error("❌ Error data:", error.response.data);
+        console.error("❌ Error headers:", error.response.headers);
 
-        const errorDetails = error.response?.data?.error;
-        if (errorDetails?.details?.errors) {
-          const fieldErrors = errorDetails.details.errors
-            .map((e: any) => `${e.path?.join(".") || "unknown"}: ${e.message}`)
-            .join(", ");
-          throw new Error(`Strapi validation error: ${fieldErrors}`);
+        if (error.response.data?.error?.details?.errors) {
+          const validationErrors = error.response.data.error.details.errors;
+          console.error("❌ Validation errors:", validationErrors);
+
+          const errorMessages = validationErrors
+            .map(
+              (err: any) =>
+                `Field: ${err.path?.join(".") || "unknown"}, Message: ${
+                  err.message
+                }`
+            )
+            .join("; ");
+
+          throw new Error(`Validation failed: ${errorMessages}`);
         }
       }
 
       throw new Error(
-        error.response?.data?.error?.message || "Failed to create order"
+        error.response?.data?.error?.message ||
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to create order"
       );
     }
   },
 
-  // Get orders by user email
   async getOrdersByEmail(email: string): Promise<Order[]> {
     try {
-      console.log("📋 Fetching orders for:", email);
+      console.log(`📋 Fetching orders for email: ${email}`);
 
-      const response = await axios.get(`${API_URL}/orders`, {
-        params: {
-          "filters[userEmail][$eq]": email,
-          "sort[0]": "createdAt:desc",
-          "pagination[pageSize]": 100,
-          populate: "*",
-        },
-      });
+      // Get ALL orders from Strapi
+      const response = await axios.get(`${API_URL}/orders`);
 
-      console.log("📦 Raw orders response:", response.data);
+      console.log("📊 Raw Strapi response:", response.data);
 
-      if (!response.data?.data) {
-        console.log("No orders data received");
+      if (!response.data) {
+        console.log("⚠️ No data in Strapi response");
         return [];
       }
 
-      const orders: Order[] = response.data.data.map((item: any) => {
-        const attributes = item.attributes || {};
+      // IMPORTANT: Strapi might return data in different formats:
+      // 1. Direct array: response.data (what you have)
+      // 2. Nested: response.data.data (standard Strapi v4)
+      // 3. Or response.data.ta (looks like you have this!)
 
-        // Parse items
-        let items = [];
-        try {
-          if (typeof attributes.items === "string") {
-            items = JSON.parse(attributes.items);
-          } else if (Array.isArray(attributes.items)) {
-            items = attributes.items;
+      let ordersData = response.data;
+
+      // Check for nested structure
+      if (Array.isArray(response.data.ta)) {
+        ordersData = response.data.ta;
+        console.log("📦 Using response.data.ta array");
+      } else if (Array.isArray(response.data.data)) {
+        ordersData = response.data.data;
+        console.log("📦 Using response.data.data array");
+      } else if (Array.isArray(response.data)) {
+        console.log("📦 Using response.data array directly");
+      } else {
+        console.log("⚠️ Unexpected response structure:", response.data);
+        return [];
+      }
+
+      console.log(`📊 Found ${ordersData.length} total orders in Strapi`);
+
+      // Filter by email
+      const userOrders = ordersData.filter((order: any) => {
+        // Check different possible email field locations
+        const orderEmail = order.userEmail || order.email;
+
+        if (!orderEmail) {
+          console.log(
+            `⚠️ Order ${order.id} has no email field. Fields:`,
+            Object.keys(order)
+          );
+          return false;
+        }
+
+        const matches = orderEmail.toLowerCase() === email.toLowerCase();
+        if (matches) {
+          console.log(
+            `✅ Found matching order ${order.id}: ${order.orderNumber} for ${email}`
+          );
+        }
+        return matches;
+      });
+
+      console.log(`✅ Found ${userOrders.length} orders for ${email}`);
+
+      // Transform to our Order type
+      const orders: Order[] = userOrders.map((order: any) => {
+        console.log(`📦 Processing order ${order.id}:`, order);
+
+        // Parse items - they might already be an array
+        let items: OrderItem[] = [];
+        if (Array.isArray(order.items)) {
+          items = order.items;
+        } else if (typeof order.items === "string") {
+          try {
+            items = JSON.parse(order.items);
+          } catch (error) {
+            console.error(
+              `❌ Error parsing items for order ${order.id}:`,
+              error
+            );
           }
-        } catch (error) {
-          console.error("Error parsing items:", error);
-          items = [];
         }
 
         // Parse shipping address
+        // In api.ts - update the shipping address parsing section
+        // Find this section and update it:
+
         let shippingAddress: ShippingAddress;
-        try {
-          // Check if it's already an object or needs parsing
-          if (typeof attributes.shippingAddress === "string") {
-            shippingAddress = JSON.parse(attributes.shippingAddress);
-          } else if (
-            attributes.shippingAddress &&
-            typeof attributes.shippingAddress === "object"
-          ) {
-            // Already an object, use it directly
-            shippingAddress = attributes.shippingAddress as ShippingAddress;
+
+        // Check what format the shipping address is in
+        console.log(
+          `📦 Order ${order.id} shippingAddress type:`,
+          typeof order.shippingAddress
+        );
+        console.log(
+          `📦 Order ${order.id} shippingAddress value:`,
+          order.shippingAddress
+        );
+
+        if (
+          order.shippingAddress &&
+          typeof order.shippingAddress === "object"
+        ) {
+          // Check if it's an object with data property (Strapi relation)
+          const addr = order.shippingAddress;
+
+          if (addr.data && typeof addr.data === "object") {
+            // It's a Strapi relation object
+            const addrData = addr.data;
+            shippingAddress = {
+              fullName:
+                addrData.fullName || addrData.attributes?.fullName || "",
+              email:
+                addrData.email ||
+                addrData.attributes?.email ||
+                order.userEmail ||
+                email,
+              phone: addrData.phone || addrData.attributes?.phone || "",
+              address: addrData.address || addrData.attributes?.address || "",
+              city: addrData.city || addrData.attributes?.city || "",
+              state: addrData.state || addrData.attributes?.state || "",
+              zipCode: addrData.zipCode || addrData.attributes?.zipCode || "",
+              country: addrData.country || addrData.attributes?.country || "",
+            };
           } else {
+            // It's a direct object
+            shippingAddress = {
+              fullName: addr.fullName || "",
+              email: addr.email || order.userEmail || email,
+              phone: addr.phone || "",
+              address: addr.address || "",
+              city: addr.city || "",
+              state: addr.state || "",
+              zipCode: addr.zipCode || "",
+              country: addr.country || "",
+            };
+          }
+        } else if (typeof order.shippingAddress === "string") {
+          try {
+            const parsed = JSON.parse(order.shippingAddress);
+            shippingAddress = {
+              fullName: parsed.fullName || "",
+              email: parsed.email || order.userEmail || email,
+              phone: parsed.phone || "",
+              address: parsed.address || "",
+              city: parsed.city || "",
+              state: parsed.state || "",
+              zipCode: parsed.zipCode || "",
+              country: parsed.country || "",
+            };
+          } catch (error) {
+            console.error(
+              `❌ Error parsing shipping address string for order ${order.id}:`,
+              error
+            );
             shippingAddress = {
               fullName: "",
-              email: attributes.userEmail || "",
+              email: order.userEmail || email,
               phone: "",
               address: "",
               city: "",
@@ -297,11 +489,16 @@ export const orderService = {
               country: "",
             };
           }
-        } catch (error) {
-          console.error("Error parsing shipping address:", error);
+        } else {
+          console.log(
+            `⚠️ Shipping address for order ${order.id} is not in expected format:`,
+            order.shippingAddress
+          );
+
+          // Try to extract address from other fields
           shippingAddress = {
             fullName: "",
-            email: attributes.userEmail || "",
+            email: order.userEmail || email,
             phone: "",
             address: "",
             city: "",
@@ -311,47 +508,58 @@ export const orderService = {
           };
         }
 
-        // Normalize status from any field variation
-        const actualStatus = normalizeStatus(
-          attributes.orderStatus || attributes.status || attributes.order_status
+        console.log(
+          `✅ Parsed shipping address for order ${order.id}:`,
+          shippingAddress
         );
 
-        return {
-          id: item.id,
-          orderNumber: attributes.orderNumber || `ORD-${item.id}`,
-          userEmail: attributes.userEmail || email,
+        // Get status
+        const rawStatus = order.orderStatus || order.status || "pending";
+        const actualStatus = normalizeStatus(rawStatus);
+
+        // Build the order object
+        const transformedOrder: Order = {
+          id: order.id || order.documentId || Date.now(),
+          orderNumber: order.orderNumber || `ORD-${order.id}`,
+          userEmail: order.userEmail || email,
           status: actualStatus,
           items: items,
-          subtotal: attributes.subtotal || 0,
-          shipping: attributes.shipping || 0,
-          tax: attributes.tax || 0,
-          total: attributes.total || 0,
+          subtotal: parseFloat(order.subtotal) || 0,
+          shipping: parseFloat(order.shipping) || 0,
+          tax: parseFloat(order.tax) || 0,
+          total: parseFloat(order.total) || 0,
           shippingAddress: shippingAddress,
-          paymentMethod:
-            attributes.paymentMethod ||
-            attributes.payment ||
-            attributes.payment_method ||
-            "unknown",
-          notes: attributes.notes || "",
-          createdAt: attributes.createdAt || new Date().toISOString(),
-          updatedAt: attributes.updatedAt,
+          paymentMethod: order.paymentMethod || order.payment || "unknown",
+          notes: order.notes || "",
+          createdAt: order.createdAt || new Date().toISOString(),
+          updatedAt: order.updatedAt,
         };
+
+        console.log(`✅ Transformed order ${transformedOrder.orderNumber}:`, {
+          status: transformedOrder.status,
+          items: transformedOrder.items.length,
+          total: transformedOrder.total,
+        });
+
+        return transformedOrder;
       });
 
-      console.log(`✅ Found ${orders.length} orders for ${email}`);
+      // Sort by date (newest first)
+      orders.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
       return orders;
     } catch (error: any) {
-      console.error("❌ Error fetching orders:", error);
+      console.error("❌ ERROR in getOrdersByEmail:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
 
-      if (error.response?.status === 404) {
-        console.error(
-          "Orders endpoint not found. Make sure 'orders' collection exists in Strapi."
-        );
-      } else if (error.response?.status === 403) {
-        console.error("Permission denied. Check Strapi permissions.");
-      }
-
-      throw new Error("Failed to fetch orders");
+      // Return empty array for better UX
+      return [];
     }
   },
 
