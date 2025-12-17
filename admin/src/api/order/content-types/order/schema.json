@@ -49,6 +49,9 @@
     },
     "paymentMethod": {
       "type": "string"
+    },
+    "notes": {
+      "type": "string"
     }
   }
 }
